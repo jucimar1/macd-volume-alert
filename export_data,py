@@ -1,0 +1,149 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Exporta dados do banco SQLite para JSON
+Usado pela página HTML para carregar dados em tempo real
+"""
+
+import sqlite3
+import json
+from datetime import datetime, timezone
+import sys
+import os
+
+DB_PATH = "alerts.db"
+JSON_OUTPUT = "data.json"
+
+def export_to_json():
+    """Exporta dados do banco para JSON"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # Buscar dados da tabela alerts
+        cursor.execute('''
+            SELECT symbol, last_zero_cross, max_histogram, 
+                   alert_sent, last_check, volume_score
+            FROM alerts
+            ORDER BY symbol
+        ''')
+        alerts_data = cursor.fetchall()
+        
+        # Buscar histórico de alertas (últimos 20)
+        cursor.execute('''
+            SELECT id, symbol, timestamp, macd_distance, max_histogram,
+                   volume_ratio, taker_buy_ratio, volume_score, decision
+            FROM alert_history
+            ORDER BY timestamp DESC
+            LIMIT 20
+        ''')
+        history_data = cursor.fetchall()
+        
+        conn.close()
+        
+        # Converter para formato JSON
+        alerts_list = []
+        for row in alerts_data:
+            symbol, last_zero_cross, max_histogram, alert_sent, last_check, volume_score = row
+            
+            # Converter timestamps para datetime legível
+            zero_cross_time = datetime.fromtimestamp(last_zero_cross, tz=timezone.utc).strftime('%Y-%m-%d %H:%M UTC') if last_zero_cross > 0 else 'Nunca'
+            last_check_time = datetime.fromtimestamp(last_check, tz=timezone.utc).strftime('%Y-%m-%d %H:%M UTC') if last_check > 0 else 'Nunca'
+            
+            # Calcular tempo desde última verificação
+            time_since_check = "N/A"
+            if last_check > 0:
+                seconds_ago = int(datetime.now(timezone.utc).timestamp() - last_check)
+                if seconds_ago < 60:
+                    time_since_check = f"{seconds_ago}s atrás"
+                elif seconds_ago < 3600:
+                    time_since_check = f"{seconds_ago // 60}min atrás"
+                else:
+                    time_since_check = f"{seconds_ago // 3600}h atrás"
+            
+            # Status do alerta
+            status = "🔴 Aguardando" if alert_sent == 0 else "🟢 Alerta Enviado"
+            status_color = "#ff4444" if alert_sent == 0 else "#00cc66"
+            
+            # Confiança baseada no volume_score
+            if volume_score >= 8:
+                confidence = "💎 ALTA"
+                confidence_color = "#00cc66"
+            elif volume_score >= 5:
+                confidence = "✅ MÉDIA-ALTA"
+                confidence_color = "#ffaa00"
+            else:
+                confidence = "⚠️ BAIXA"
+                confidence_color = "#ff4444"
+            
+            alerts_list.append({
+                "symbol": symbol,
+                "last_zero_cross": last_zero_cross,
+                "zero_cross_time": zero_cross_time,
+                "max_histogram": round(max_histogram, 6),
+                "alert_sent": alert_sent,
+                "status": status,
+                "status_color": status_color,
+                "last_check": last_check,
+                "last_check_time": last_check_time,
+                "time_since_check": time_since_check,
+                "volume_score": volume_score,
+                "confidence": confidence,
+                "confidence_color": confidence_color
+            })
+        
+        # Converter histórico para JSON
+        history_list = []
+        for row in history_data:
+            id, symbol, timestamp, macd_distance, max_histogram, volume_ratio, taker_buy_ratio, volume_score, decision = row
+            
+            timestamp_dt = datetime.fromtimestamp(timestamp, tz=timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
+            
+            # Calcular ratio de distância
+            distance_ratio = round(macd_distance / max_histogram, 2) if max_histogram > 0 else 0
+            
+            # Direção baseada na decisão
+            direction = "🔼" if "LONG" in decision or "BULLISH" in decision.upper() else "🔽"
+            
+            history_list.append({
+                "id": id,
+                "symbol": symbol,
+                "timestamp": timestamp,
+                "timestamp_formatted": timestamp_dt,
+                "macd_distance": round(macd_distance, 6),
+                "max_histogram": round(max_histogram, 6),
+                "distance_ratio": distance_ratio,
+                "volume_ratio": round(volume_ratio, 2),
+                "taker_buy_ratio": round(taker_buy_ratio, 1),
+                "volume_score": volume_score,
+                "decision": decision,
+                "direction": direction
+            })
+        
+        # Dados gerais
+        current_time = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
+        total_alerts = len([a for a in alerts_list if a["alert_sent"] == 1])
+        total_symbols = len(alerts_list)
+        
+        # Montar JSON final
+        output_data = {
+            "last_updated": current_time,
+            "total_symbols": total_symbols,
+            "active_alerts": total_alerts,
+            "alerts": alerts_list,
+            "history": history_list
+        }
+        
+        # Salvar JSON
+        with open(JSON_OUTPUT, 'w', encoding='utf-8') as f:
+            json.dump(output_data, f, ensure_ascii=False, indent=2)
+        
+        print(f"✅ Dados exportados para {JSON_OUTPUT}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Erro ao exportar dados: {e}")
+        return False
+
+if __name__ == "__main__":
+    export_to_json()
