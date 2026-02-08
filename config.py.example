@@ -1,0 +1,26 @@
+# config.py.example - RENOMEIE PARA config.py E PREENCHA AS CHAVES
+# ⚠️ NUNCA COMMITAR ESTE ARQUIVO COM CHAVES REAIS!
+
+# Telegram (obtenha em @BotFather)
+TELEGRAM_TOKEN = "SEU_TOKEN_AQUI"
+TELEGRAM_CHAT_ID = "SEU_CHAT_ID_AQUI"
+
+# Binance (API Key + Secret - crie em binance.com/my/settings/api-management)
+BINANCE_API_KEY = "SUA_API_KEY_AQUI"
+BINANCE_API_SECRET = "SEU_API_SECRET_AQUI"
+
+# Configuração de trading
+SYMBOLS = ["SOLUSDT", "BTCUSDT", "ETHUSDT", "BNBUSDT"]  # Priorize alta liquidez
+
+# Parâmetros MACD (padrão 12,26,9)
+MACD_FAST = 12
+MACD_SLOW = 26
+MACD_SIGNAL = 9
+
+# Filtro de horário UTC (conforme sua preferência por alta liquidez)
+TRADING_HOURS = [(7, 10), (12, 16)]  # UTC: 07:00-10:00 e 12:00-16:00
+
+# Parâmetros de volume para validação institucional
+VOLUME_THRESHOLD_STRONG = 1.8      # Volume ≥ 1.8x média = sinal forte
+VOLUME_THRESHOLD_MODERATE = 1.3    # Volume ≥ 1.3x média = sinal moderado
+TAKER_BUY_THRESHOLD = 65           # % mínimo de compras agressivas
